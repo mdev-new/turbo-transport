@@ -1,0 +1,30 @@
+[out:json][timeout:25];
+
+(
+  nwr["highway"="footway"]({{bbox}});
+  nwr["highway"="pedestrian"]({{bbox}});
+  nwr["highway"="path"]({{bbox}});
+  nwr["highway"="service"]({{bbox}});
+  nwr["highway"="residential"]({{bbox}});
+  nwr["highway"="living_street"]({{bbox}});
+  nwr["highway"="steps"]({{bbox}});
+  nwr["highway"="sidewalk"]({{bbox}});
+  //nwr["highway"="crossing"]({{bbox}});
+  nwr["highway"="cycleway"]({{bbox}});
+  //nwr["route"="foot"]({{bbox}});
+);
+out geom; // print results
+
+(
+nwr["type"="route"]["route"="trolleybus"]({{bbox}});
+nwr["type"="route"]["route"="bus"]({{bbox}});
+);
+out geom;
+
+(
+nwr["public_transport"="platform"]["bus"="yes"]({{bbox}});
+nwr["public_transport"="stop_position"]["bus"="yes"]({{bbox}});
+nwr["public_transport"="stop_area"]["bus"="yes"]({{bbox}});
+nwr["public_transport"="station"]["bus"="yes"]({{bbox}});
+);
+out geom;
