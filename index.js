@@ -1,9 +1,25 @@
+import { AStar, Graph } from './AStar-generic.js'
+import { gpsDistanceBetween, fetch_geojson } from './utils.js'
+import { OVERPASS_REQUEST, DPMP_APIKEY } from './constants.js' 
 
-import osmtogeojson from 'osmtogeojson'
-import { AStar } from './AStar-generic.js'
-import { gpsDistanceBetween } from './utils.js'
+/*
+TODO:
+ - Join edges?
+  - todo make search be aware that if it finds an end of an edge it can transition into another one
+ - Build the actual graph
+*/
 
-class Edge {
+class MyGraph extends Graph {
+
+  constructor(stations, ways) {
+
+    // todo process info to `this.nodes` & `this.edges`
+
+  }
+
+}
+
+class Path {
   meanOfStransport = "";
   length = 0.0;
   path = [];
@@ -15,24 +31,24 @@ class Edge {
 
     let posAccum = 0.0;
     for (let i = 0; i < path.length - 1; i++) {
-      posAccum += gpsDistanceBetween(path[i].toReversed(), path[i+1].toReversed()) // compute straight line distance
+      // compute straight line distance
+      posAccum += gpsDistanceBetween(path[i].toReversed(), path[i+1].toReversed())
     }
 
     this.length = posAccum
   }
 }
 
-class Node {
-  //edges = []; // todo think: why? why not compute at search time?
+class Station {
   lat = 0.0;
   lon = 0.0;
   name = "";
+  connections = [];
 
-  constructor(lat, lon, name = ""/*, neighboring_edges*/) {
+  constructor(lat, lon, name = "") {
     this.lat = lat;
     this.lon = lon;
     this.name = name;
-    //this.edges = neighboring_edges;
   }
 }
 
@@ -40,8 +56,8 @@ class Node {
 // I need to track the current time somehow
 
 class MySearch extends AStar {
-  constructor(nodes, edges, walk_speed, bus_snapshot) {
-    super(nodes, edges)
+  constructor(graph, walk_speed, bus_snapshot) {
+    super(graph)
     this.walk_speed = walk_speed
     this.bus_snapshot = bus_snapshot
   }
@@ -74,9 +90,10 @@ class MySearch extends AStar {
   // the weight will basically be the time
   edge_cost(edge) {
     if(edge.meanOfStransport == 'foot') {
-      return edge.length / this.walk_speed // s = vt -> t = s/v
+      return edge.length / this.walk_speed // the time it takes to walk the edge
     } else if(edge.meanOfStransport == 'public') {
-      // we're going by public transport, todo use live data
+      // we're going by public transport
+      // todo use live data
 
       // lets calc in hours
       const wait_time = 2/60;
@@ -86,26 +103,11 @@ class MySearch extends AStar {
 
     }
   }
-}
 
-// generate this with overpass turbo (export->raw data from overpass api->copy link addr)
-const addr = "https://overpass-api.de/api/interpreter?data=%5Bout%3Ajson%5D%5Btimeout%3A25%5D%3B%0A%0A%28%0A%20%20nwr%5B%22highway%22%3D%22footway%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0A%20%20nwr%5B%22highway%22%3D%22pedestrian%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0A%20%20nwr%5B%22highway%22%3D%22path%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0A%20%20nwr%5B%22highway%22%3D%22service%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0A%20%20nwr%5B%22highway%22%3D%22residential%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0A%20%20nwr%5B%22highway%22%3D%22living_street%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0A%20%20nwr%5B%22highway%22%3D%22steps%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0A%20%20nwr%5B%22highway%22%3D%22sidewalk%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0A%20%20%2F%2Fnwr%5B%22highway%22%3D%22crossing%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0A%20%20nwr%5B%22highway%22%3D%22cycleway%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0A%20%20%2F%2Fnwr%5B%22route%22%3D%22foot%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0A%29%3B%0Aout%20geom%3B%20%2F%2F%20print%20results%0A%0A%28%0Anwr%5B%22type%22%3D%22route%22%5D%5B%22route%22%3D%22trolleybus%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0Anwr%5B%22type%22%3D%22route%22%5D%5B%22route%22%3D%22bus%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0A%29%3B%0Aout%20geom%3B%0A%0A%28%0Anwr%5B%22public_transport%22%3D%22platform%22%5D%5B%22bus%22%3D%22yes%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0Anwr%5B%22public_transport%22%3D%22stop_position%22%5D%5B%22bus%22%3D%22yes%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0Anwr%5B%22public_transport%22%3D%22stop_area%22%5D%5B%22bus%22%3D%22yes%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0Anwr%5B%22public_transport%22%3D%22station%22%5D%5B%22bus%22%3D%22yes%22%5D%2850.019169984015775%2C15.745639882405735%2C50.03906083112809%2C15.811235909779898%29%3B%0A%29%3B%0Aout%20geom%3B"
-
-function get_geojson(query, callback) {
-
-  if(true) {
-
-    const options = {
-      flatProperties: true
-    }
-
-    fetch(addr).then(response => response.json()).then(json => callback(osmtogeojson(json, options)))
-
-  } else {
-    import('./result.json', { assert: { type: "json" } }).then(imported => callback(imported.default))
+  projected_cost(edge) {
+    
   }
 }
-
 
 function parse_geo(geojson) {
 
@@ -130,7 +132,7 @@ function parse_geo(geojson) {
           ['footway', 'pedestrian', 'path', 'steps', 'sidewalk', 'cycleway', 'service', 'residential', 'living_street']
           .includes(properties.highway)
         ) {
-          const edge = new Edge(coords, 'foot')
+          const edge = new Path(coords, 'foot')
           edges.push(edge)
         }
 
@@ -149,7 +151,7 @@ function parse_geo(geojson) {
 
       case 'MultiLineString': {
         if(properties.type === 'route' || properties.route !== undefined) {
-          const edge = new Edge(/* todo coords */[], 'public', [properties.ref])
+          const edge = new Path(/* todo coords */[], 'public', [properties.ref])
           edges.push(edge)
         }
 
@@ -166,12 +168,8 @@ function parse_geo(geojson) {
 
 }
 
-
-get_geojson(addr, (geojson) => {
-
-  //console.log(geojson)
-
-  // todo parse geojson to a list of nodes & edges
+// This is the main procedure.
+fetch_geojson(OVERPASS_REQUEST, (geojson) => {
 
   const [nodes, edges] = parse_geo(geojson)
   //console.log(nodes, edges)

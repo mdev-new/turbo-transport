@@ -1,20 +1,46 @@
-export class AStar {
-  nodes = [];
-  edges = [];
+export class Graph {
+  adjList = {};
 
-  constructor(nodes, edges) {
+  constructor() {
+
+    if(this.constructor == Graph) {
+      throw new Error("`Graph` is an abstract class")
+    }
+  }
+
+  addVertex(v) {
+    if(!this.adjList[v]) {
+      this.adjList[v] = []
+    }
+  }
+
+  addEdge(v1, v2) {
+    this.adjacencyList[vertex1].push(vertex2);
+    this.adjacencyList[vertex2].push(vertex1);
+  }
+
+  /* return: array of node's neighbours */
+  neighbours(node) {
+    return;
+  }
+}
+
+
+export class AStar {
+  graph = null;
+
+  constructor(graph) {
 
     if(this.constructor == AStar) {
       throw new Error("`AStar` is an abstract class")
     }
 
-    this.nodes = nodes
-    this.edges = edges
+    this.graph = graph;
   }
 
   /* return: the cost of taking an specific edge */
-  edge_cost(edge) {
-    throw new Error("`edge_cost` not implemented")
+  projected_cost(edge) {
+    throw new Error("`projected_cost` not implemented")
   }
 
   /* return: estimated cost of going from a node to the very end */
