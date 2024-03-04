@@ -1,31 +1,3 @@
-export class Graph {
-  adjList = {};
-
-  constructor() {
-
-    if(this.constructor == Graph) {
-      throw new Error("`Graph` is an abstract class")
-    }
-  }
-
-  addVertex(v) {
-    if(!this.adjList[v]) {
-      this.adjList[v] = []
-    }
-  }
-
-  addEdge(v1, v2) {
-    this.adjacencyList[vertex1].push(vertex2);
-    this.adjacencyList[vertex2].push(vertex1);
-  }
-
-  /* return: array of node's neighbours */
-  neighbours(node) {
-    return;
-  }
-}
-
-
 export class AStar {
   graph = null;
 

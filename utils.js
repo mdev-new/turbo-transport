@@ -5,8 +5,7 @@ import crawler from 'crawler-request'
 const DEG_TO_RAD = Math.PI / 180
 const EARTH_RADIUS = 6371;
 
-// pA - [lat, lon]
-// pB - [lat, lon]
+// pA, pB -> [lat, lon]
 export function gpsDistanceBetween(pA, pB) {
 
   const [lat1, lon1] = pA;
@@ -26,7 +25,9 @@ export function fetch_geojson(query, callback) {
     flatProperties: true
   }
 
-  fetch(addr).then(response => response.json()).then(json => callback(osmtogeojson(json, options)))
+  fetch(query)
+    .then(response => response.json())
+    .then(json => callback(osmtogeojson(json, options)))
 }
 
 export function fetch_buses(address, apikey, callback) {
@@ -39,13 +40,14 @@ export function fetch_buses(address, apikey, callback) {
     body: `{\"key\":\"${apikey}\"}`,
     method: "POST",
   })
-  .then(res => res.json())
-  .then(json => callback(json));
+    .then(res => res.json())
+    .then(json => callback(json));
 
 }
 
-export function fetch_timetables() {
-  crawler("https://www.dpmp.cz/download/transport_line_cs/1701790512_cs_01_slovany_20231210.pdf").then(response => {
-    console.log(response.text)
-  })
+export function fetch_timetable(filename) {
+  crawler(`https://www.dpmp.cz/download/transport_line_cs/${filename}`)
+    .then(response => {
+      console.log(response.text)
+    })
 }
