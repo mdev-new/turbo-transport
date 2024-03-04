@@ -2,13 +2,14 @@
 
 (
   nwr["highway"="footway"]({{bbox}});
-  nwr["highway"="pedestrian"]({{bbox}});
+  nwr["type"!="multipolygon"]["highway"="pedestrian"]({{bbox}});
   nwr["highway"="path"]({{bbox}});
-  nwr["highway"="service"]({{bbox}});
+  nwr["access"!="private"]["highway"="service"]({{bbox}});
   nwr["highway"="residential"]({{bbox}});
   nwr["highway"="living_street"]({{bbox}});
   nwr["highway"="steps"]({{bbox}});
   nwr["highway"="sidewalk"]({{bbox}});
+  nwr["highway"="track"]({{bbox}});
   //nwr["highway"="crossing"]({{bbox}});
   nwr["highway"="cycleway"]({{bbox}});
   //nwr["route"="foot"]({{bbox}});
@@ -16,15 +17,11 @@
 out geom; // print results
 
 (
-nwr["type"="route"]["route"="trolleybus"]({{bbox}});
-nwr["type"="route"]["route"="bus"]({{bbox}});
+nwr["type"="route"]["route"~"bus"]({{bbox}});
 );
 out geom;
 
 (
-nwr["public_transport"="platform"]["bus"="yes"]({{bbox}});
-nwr["public_transport"="stop_position"]["bus"="yes"]({{bbox}});
-nwr["public_transport"="stop_area"]["bus"="yes"]({{bbox}});
-nwr["public_transport"="station"]["bus"="yes"]({{bbox}});
+nwr["public_transport"]["bus"="yes"]({{bbox}});
 );
 out geom;
