@@ -32,19 +32,24 @@ export function gpsDistanceBetween(pA, pB) {
 // pA, pB -> [lat, lon]
 // returns [lat, lon] of midpoint
 // http://www.movable-type.co.uk/scripts/latlong.html
-// FIXME testing
 export function midpoint(pA, pB) {
 
   // These get converted to radians directly in the calculations.
   const [lat1, lon1] = pA;
   const [lat2, lon2] = pB;
 
-  const Bx = Math.cos(lat2 * DEG_TO_RAD) * Math.cos((lon2 - lon1) * DEG_TO_RAD)
-  const By = Math.cos(lat2 * DEG_TO_RAD) * Math.sin((lon2 - lon1) * DEG_TO_RAD)
+  const l2cos = Math.cos(lat2 * DEG_TO_RAD)
+
+  const Bx = l2cos * Math.cos((lon2 - lon1) * DEG_TO_RAD)
+  const By = l2cos * Math.sin((lon2 - lon1) * DEG_TO_RAD)
 
   const mid_lat = Math.atan2(
-      Math.sin(lat1 * DEG_TO_RAD) + Math.sin(lat2 * DEG_TO_RAD),
-      Math.sqrt( (Math.cos(lat1 * DEG_TO_RAD)+Bx)*(Math.cos(lat1 * DEG_TO_RAD)+Bx) + By*By )
+      Math.sin(lat1 * DEG_TO_RAD)
+      + Math.sin(lat2 * DEG_TO_RAD),
+      Math.sqrt(
+          Math.pow(Math.cos(lat1 * DEG_TO_RAD)+Bx, 2)
+          + Math.pow(By, 2)
+      )
   );
 
   const mid_lon = lon1 * DEG_TO_RAD + Math.atan2(By, Math.cos(lat1 * DEG_TO_RAD) + Bx);

@@ -1,0 +1,8 @@
+Na zacatku - Stack unprocessed veci plnej vsech cest
+
+Kazdou cestu ve stacku splitnout na x 5m segmentu
+Uprostred kazdyho segmentu checkovat jestli neni v okoli 10m node
+ -> Pokud je, ukoncit edge a nastavit jeho konecny souradnice na node
+  -> Zaroven ten originalni edge okopirovat, nastavit jeho zacatek na node
+     a pushnout ho zpatky do stacku na dalsi processing
+

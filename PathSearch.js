@@ -1,4 +1,6 @@
-class PathSearch extends AStar {
+import { AStar } from './AStar-generic.js'
+
+export class PathSearch extends AStar {
   constructor(graph, walk_speed, bus_snapshot) {
     super(graph)
     this.walk_speed = walk_speed
@@ -11,7 +13,7 @@ class PathSearch extends AStar {
    */
   compare_nodes(nodeA, nodeB) {
 
-    if(typeof(nodeA) == typeof(nodeB)) {
+    if(typeof(nodeA) === typeof(nodeB)) {
 
       return nodeA === nodeB
 
@@ -32,9 +34,9 @@ class PathSearch extends AStar {
 
   // the weight will basically be the time
   edge_cost(edge) {
-    if(edge.meanOfStransport == 'foot') {
+    if(edge.meanOfStransport === 'foot') {
       return edge.length / this.walk_speed
-    } else if(edge.meanOfStransport == 'public') {
+    } else if(edge.meanOfStransport === 'public') {
       // todo use live data
 
       // lets calc in hours
@@ -43,7 +45,7 @@ class PathSearch extends AStar {
 
       return wait_time+ride_time
 
-    } else if(edge.meanOfStransport == 'train') {
+    } else if(edge.meanOfStransport === 'train') {
       // todo use live data
 
       // lets calc in hours
@@ -52,7 +54,7 @@ class PathSearch extends AStar {
 
       return wait_time+ride_time
 
-    } else if(edge.meanOfStransport == 'link_bus') {
+    } else if(edge.meanOfStransport === 'link_bus') {
       // todo use live data
 
       // lets calc in hours
