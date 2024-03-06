@@ -6,22 +6,13 @@ import {
   fetch_buses,
   midpoint,
   findClosestNode,
-  isNodeAt
+  isNodeAt,
+  overlapping_pairs
 } from './utils.js'
 import { OVERPASS_REQUEST, DPMP_APIKEY } from './constants.js'
 import { Graph } from './Graph.js'
 import { PathSearch } from './PathSearch.js'
 
-// overlapping pairs
-// [1, 2, 3, 4] -> [[1, 2], [2, 3], [3, 4]]
-function overlapping_pairs(arr) {
-  let result = []
-  for (let i = 1; i < arr.length; i++) {
-    result.push([arr[i-1], arr[i]])
-  }
-
-  return result
-}
 
 /*
 TODO:
@@ -131,7 +122,7 @@ function parse_geo(geo) {
   console.log(`Items to process: ${edges.length * nodes.length}`)
 
   let itemsToProcess = edges.slice();
-  const segmentLen = 3/1000; // in km
+  const segmentLen = 21/1000; // in km
 
   while(itemsToProcess.length !== 0) {
     process.stderr.write(`\r${itemsToProcess.length}/${edges.length} (iters:${itemsToProcess.length * nodes.length})`)
@@ -142,7 +133,7 @@ function parse_geo(geo) {
       //console.log(seg)
       const segLength = gpsDistanceBetween(seg[0].toReversed(), seg[1].toReversed())
 
-      const segments = Math.floor(segLength / segmentLen)
+      const segments = Math.max(1, Math.floor(segLength / segmentLen))
 
       const [startLon, startLat] = seg[0]
       const [endLon, endLat] = seg[1]
@@ -152,12 +143,13 @@ function parse_geo(geo) {
 
       // For each sub-segment, compute the midpoint and its distance from
       // the nearest node
-      for (let i = 1; i < segments; i++) {
-        const seg_start_lat = startLat + ((i - 1) * dSegLat)
-        const seg_start_lon = startLon + ((i - 1) * dSegLon)
+      for (let i = 0; i < segments; i++) {
+        const seg_start_lat = startLat + (i * dSegLat)
+        const seg_start_lon = startLon + (i * dSegLon)
 
-        const seg_end_lat = startLat + (i * dSegLat)
-        const seg_end_lon = startLon + (i * dSegLon)
+        // The start of the next segment is the end of the current one
+        const seg_end_lat = startLat + ((i + 1) * dSegLat)
+        const seg_end_lon = startLon + ((i + 1) * dSegLon)
 
         const mid = midpoint(
           [seg_start_lat, seg_start_lon],
@@ -166,8 +158,9 @@ function parse_geo(geo) {
 
         const [closestN, minDist] = findClosestNode(nodes, mid)
 
-        if(minDist < 5 && segno !== 0) {
+        if(minDist > 0 && minDist < (segmentLen * 1000 / 2) && segno !== 0 && segno !== currentEdge.path.length-1) {
 
+          // Remove the current edge from the list of edges
           edges = edges.filter(item => item !== currentEdge)
 
           let newPath = currentEdge.path.slice(0, segno)
@@ -178,6 +171,7 @@ function parse_geo(geo) {
           newPath2.unshift([closestN.lon, closestN.lat])
           itemsToProcess.push(new Path(newPath2, currentEdge.meanOfStransport))
 
+          // Break out of the for-each iteration
           return;
         }
       }
@@ -229,16 +223,16 @@ function parse_geo(geo) {
 fetch_geojson(OVERPASS_REQUEST, (geojson) => {
 
   const graph = parse_geo(geojson)
-  graph.print()
+  console.log(graph.length)
   //console.log(nodes, edges)
   const searcher = new PathSearch(graph)
 
-  fetch_buses(DPMP_APIKEY, (buses) => {
+  //fetch_buses(DPMP_APIKEY, (buses) => {
 
     const start = "Namesti republiky"
     const end = "Strossova"
-    const path = searcher.search(start, end, 5, buses)
+    const path = searcher.search(start, end, 5, [])
     //console.log(path)
-  })
+  //})
 
 })

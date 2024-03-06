@@ -119,3 +119,15 @@ export function findClosestNode(nodes, point) {
 
   return [nodes[minIdx], min]
 }
+
+
+// overlapping pairs
+// [1, 2, 3, 4] -> [[1, 2], [2, 3], [3, 4]]
+export function overlapping_pairs(arr) {
+  let result = []
+  for (let i = 1; i < arr.length; i++) {
+    result.push([arr[i-1], arr[i]])
+  }
+
+  return result
+}
