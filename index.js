@@ -1,8 +1,15 @@
 "use strict";
 
-import {gpsDistanceBetween, fetch_geojson, fetch_buses, midpoint} from './utils.js'
+import {
+  gpsDistanceBetween,
+  fetch_geojson,
+  fetch_buses,
+  midpoint,
+  findClosestNode,
+  isNodeAt
+} from './utils.js'
 import { OVERPASS_REQUEST, DPMP_APIKEY } from './constants.js'
-import { Graph, GraphEntry } from './Graph.js'
+import { Graph } from './Graph.js'
 import { PathSearch } from './PathSearch.js'
 
 // overlapping pairs
@@ -42,8 +49,8 @@ class Path {
   meanOfStransport = "";
   length = 0.0;
 
-  constructor(path, meanOfStransport, lines = []) {
-    this.meanOfStransport = meanOfStransport;
+  constructor(path, meanOftransport, lines = []) {
+    this.meanOfStransport = meanOftransport;
     this.path = path;
     this.pubtran_lines = lines;
 
@@ -68,6 +75,8 @@ function parse_geo(geo) {
   const line_strings = features.filter(feature => feature.geometry.type === 'LineString')
   const multiline_strings = features.filter(feature => feature.geometry.type === 'MultiLineString')
 
+  //console.dir(multiline_strings.map(s => s.geometry.coordinates), {depth: null})
+
   nodes = points.map(point => {
     const coords = point.geometry.coordinates
 
@@ -82,8 +91,6 @@ function parse_geo(geo) {
     const properties = linestring.properties
     const coords = linestring.geometry.coordinates
 
-    //console.log(coords)
-
     // Let's let Overpass do the filtering
     if (properties.highway) {
       return new Path(coords, 'foot')
@@ -92,14 +99,31 @@ function parse_geo(geo) {
     return null
   }).filter(n => n !== null)
 
-  //     case 'MultiLineString': {
-  //       if(properties.type === 'route' || properties.route !== undefined) {
-  //         const edge = new Path(/* todo coords */[], 'public', [properties.ref])
-  //         edges.push(edge)
-  //       }
+  const resultSets = multiline_strings.map(mls => {
+    const properties = mls.properties
+    const coords = mls.geometry.coordinates
 
-  //       break;
-  //     }
+    if(properties.type === 'route' || properties.route !== undefined) {
+
+      const results = []
+
+      for(const set of coords) {
+        results.push(new Path(set, 'public', [properties.ref]))
+      }
+
+      return results
+    }
+
+    return [];
+  })
+
+  for(const r of resultSets) {
+    for (const j of r) {
+      edges.push(j)
+    }
+  }
+
+  console.log(edges.length, nodes.length)
 
   // 2nd stage - Post processing our loaded data, so it
   // has some sort of connectivity
@@ -107,19 +131,18 @@ function parse_geo(geo) {
   console.log(`Items to process: ${edges.length * nodes.length}`)
 
   let itemsToProcess = edges.slice();
-  let result_edges = [];
-  //let newNodes = nodes.slice();
   const segmentLen = 3/1000; // in km
 
   while(itemsToProcess.length !== 0) {
-    process.stdout.write(`\r${itemsToProcess.length}/${edges.length} (items:${itemsToProcess.length * nodes.length})`)
-    let currentPath = itemsToProcess.pop()
+    process.stderr.write(`\r${itemsToProcess.length}/${edges.length} (iters:${itemsToProcess.length * nodes.length})`)
+    let currentEdge = itemsToProcess.pop()
 
-    overlapping_pairs(currentPath.path).forEach(seg => {
+    // This iterates over the straight-line segments of the path
+    overlapping_pairs(currentEdge.path).forEach((seg, segno) => {
       //console.log(seg)
-      const dist = gpsDistanceBetween(seg[0].toReversed(), seg[1].toReversed())
+      const segLength = gpsDistanceBetween(seg[0].toReversed(), seg[1].toReversed())
 
-      const segments = Math.floor(dist / segmentLen)
+      const segments = Math.floor(segLength / segmentLen)
 
       const [startLon, startLat] = seg[0]
       const [endLon, endLat] = seg[1]
@@ -127,8 +150,8 @@ function parse_geo(geo) {
       const dSegLat = (endLat - startLat) / segments
       const dSegLon = (endLon - startLon) / segments
 
-      //console.log(`${startLat} ${endLat} ${startLon} ${endLon} ${dSegLat} ${dSegLon}`)
-
+      // For each sub-segment, compute the midpoint and its distance from
+      // the nearest node
       for (let i = 1; i < segments; i++) {
         const seg_start_lat = startLat + ((i - 1) * dSegLat)
         const seg_start_lon = startLon + ((i - 1) * dSegLon)
@@ -137,55 +160,41 @@ function parse_geo(geo) {
         const seg_end_lon = startLon + (i * dSegLon)
 
         const mid = midpoint(
-            [seg_start_lat, seg_start_lon],
-            [seg_end_lat, seg_end_lon]
-        ).map(r => r * 180 / Math.PI) // convert back to deg
+          [seg_start_lat, seg_start_lon],
+          [seg_end_lat, seg_end_lon]
+        )
 
-        // This figures out the minimum distance
-        // between the mids of segments and closest node to
-        // each one of those segments
-        let min = 9999999999999;
-        let minIdx = 0;
-        for(let i = 0; i < nodes.length; i++) {
-          const n = nodes[i]
-          const dist = gpsDistanceBetween(mid, [n.lat, n.lon]) * 1000
-          if(min > dist) {
-            min = dist;
-            minIdx = i;
-          }
-        }
+        const [closestN, minDist] = findClosestNode(nodes, mid)
 
-        // if we're within 5m of an stop
-        if (min < 5) {
-          // This path is now finalized, connected to a node
-          const newPath = currentPath.path.slice(0, minIdx)
-          newPath.push([nodes[minIdx].lon, nodes[minIdx].lat])
-          const newEdge = new Path(newPath, currentPath.meanOfStransport)
+        if(minDist < 5 && segno !== 0) {
 
-          result_edges.push(newEdge)
+          edges = edges.filter(item => item !== currentEdge)
 
-          // The remaining part of the edge
-          const newPath2 = currentPath.path.slice(minIdx, -1)
-          const newEdge2 = new Path(newPath2, currentPath.meanOfStransport)
+          let newPath = currentEdge.path.slice(0, segno)
+          newPath.push([closestN.lon, closestN.lat])
+          edges.push(new Path(newPath, currentEdge.meanOfStransport))
 
-          itemsToProcess.push(newEdge2)
-        } else {
-          // I guess let's create nodes at the edges?
-          const lastIndex = currentPath.path.length-1
+          let newPath2 = currentEdge.path.slice(segno+1, currentEdge.path.length)
+          newPath2.unshift([closestN.lon, closestN.lat])
+          itemsToProcess.push(new Path(newPath2, currentEdge.meanOfStransport))
 
-          const [beginLon, beginLat] = currentPath.path[0]
-          const [endLon, endLat] = currentPath.path[lastIndex]
-
-          const start = new Stop(beginLat, beginLon)
-          const end = new Stop(endLat, endLon)
-
-          nodes.push(start)
-          nodes.push(end)
-
-          // We don't need to do anything with the edge, so just keep it
-          result_edges.push(currentPath)
+          return;
         }
       }
+
+      /* else { // this doesn't make any sense
+        // I guess let's create nodes at the edges?
+        const lastIndex = currentEdge.path.length-1
+
+        const [beginLon, beginLat] = currentEdge.path[0]
+        const [endLon, endLat] = currentEdge.path[lastIndex]
+
+        const start = new Stop(beginLat, beginLon)
+        const end = new Stop(endLat, endLon)
+
+        nodes.push(start)
+        nodes.push(end)
+      }*/
 
     })
 
@@ -193,20 +202,22 @@ function parse_geo(geo) {
 
   // 3rd (and final) stage - Loading the data into a graph.
 
+  //console.log(nodes)
+  //console.dir(edges, {depth: null})
+  //process.stdout.write(JSON.stringify(edges))
+
   const graph = new Graph();
 
-  for (const node of nodes) {
-    graph.addNode(node)
-  }
+  for (const edge of edges) {
+    const n1 = isNodeAt(nodes, edge.path[0].toReversed());
+    const n2 = isNodeAt(nodes, edge.path[edge.path.length-1].toReversed());
 
-  for (const edge of result_edges) {
-    const n1 = nodes.filter(n => n.lat === edge.path[0][0] && n.lon === edge.path[0][1])[0];
-    const n2 = nodes.filter(n => n.lat === edge.path[edge.path.length-1][0] && n.lon === edge.path[edge.path.length-1][1])[0];
-
-    if (edge.meanOfStransport === 'foot') {
-      graph.addWayBothDirs(n1, n2, edge)
-    } else {
-      graph.addWaySingleDir(n1, n2, edge)
+    if (n1 !== null && n2 !== null) {
+      if (edge.meanOfStransport === 'foot') {
+        graph.addWayBothDirs(n1, n2, edge)
+      } else {
+        graph.addWaySingleDir(n1, n2, edge)
+      }
     }
   }
 
@@ -218,13 +229,16 @@ function parse_geo(geo) {
 fetch_geojson(OVERPASS_REQUEST, (geojson) => {
 
   const graph = parse_geo(geojson)
+  graph.print()
   //console.log(nodes, edges)
+  const searcher = new PathSearch(graph)
 
-  const searcher = new PathSearch(graph, 5, [])
+  fetch_buses(DPMP_APIKEY, (buses) => {
 
-  const start = "Namesti republiky"
-  const end = "Strossova"
-  const path = searcher.search(start, end)
-  //console.log(path)
+    const start = "Namesti republiky"
+    const end = "Strossova"
+    const path = searcher.search(start, end, 5, buses)
+    //console.log(path)
+  })
 
 })

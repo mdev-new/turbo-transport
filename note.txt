@@ -6,3 +6,6 @@ Uprostred kazdyho segmentu checkovat jestli neni v okoli 10m node
   -> Zaroven ten originalni edge okopirovat, nastavit jeho zacatek na node
      a pushnout ho zpatky do stacku na dalsi processing
 
+
+
+IDEAS - Sort nodes (somehow?) and perform Binary Search?

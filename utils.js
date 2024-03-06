@@ -3,7 +3,10 @@ import crawler from 'crawler-request'
 
 
 export const DEG_TO_RAD = Math.PI / 180
-const EARTH_RADIUS = 6371;
+const EARTH_RADIUS = 6371; // km
+
+export const to_deg = (rad) => rad * 180 / Math.PI
+export const to_rad = (deg) => deg * Math.PI / 180
 
 // Haversine
 // pA, pB -> [lat, lon]
@@ -54,7 +57,7 @@ export function midpoint(pA, pB) {
 
   const mid_lon = lon1 * DEG_TO_RAD + Math.atan2(By, Math.cos(lat1 * DEG_TO_RAD) + Bx);
 
-  return [mid_lat, mid_lon]
+  return [mid_lat, mid_lon].map(to_deg)
 }
 
 export function fetch_geojson(query, callback) {
@@ -67,8 +70,8 @@ export function fetch_geojson(query, callback) {
     .then(json => callback(osmtogeojson(json, options)))
 }
 
-export function fetch_buses(address, apikey, callback) {
-  fetch(address, {
+export function fetch_buses(apikey, callback) {
+  fetch("https://online.dpmp.cz/api/buses", {
     headers: {
         "Accept": "*/*",
         "Accept-Language": "cs,sk;q=0.8,en-US;q=0.5,en;q=0.3",
@@ -87,4 +90,32 @@ export function fetch_timetable(filename) {
     .then(response => {
       console.log(response.text)
     })
+}
+
+export function isNodeAt(nodes, point) {
+  const [lat, lon] = point;
+
+  for (const node of nodes) {
+    if (node.lat === lat && node.lon === lon) {
+      return node;
+    }
+  }
+
+  return null;
+}
+
+// returns the closest node and the distance to it IN METERS
+export function findClosestNode(nodes, point) {
+  let min = 9999999999999;
+  let minIdx = 0;
+  for(let i = 0; i < nodes.length; i++) {
+    const n = nodes[i]
+    const dist = gpsDistanceBetween(point, [n.lat, n.lon]) * 1000
+    if(min >= dist) {
+      min = dist;
+      minIdx = i;
+    }
+  }
+
+  return [nodes[minIdx], min]
 }

@@ -3,7 +3,7 @@ export class AStar {
 
   constructor(graph) {
 
-    if(this.constructor == AStar) {
+    if(this.constructor === AStar) {
       throw new Error("`AStar` is an abstract class")
     }
 

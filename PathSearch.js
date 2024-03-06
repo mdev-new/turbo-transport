@@ -1,10 +1,8 @@
 import { AStar } from './AStar-generic.js'
 
 export class PathSearch extends AStar {
-  constructor(graph, walk_speed, bus_snapshot) {
+  constructor(graph) {
     super(graph)
-    this.walk_speed = walk_speed
-    this.bus_snapshot = bus_snapshot
   }
 
   /*
@@ -68,5 +66,12 @@ export class PathSearch extends AStar {
 
   projected_cost(edge) {
     
+  }
+
+  search(start, end, walk_speed, bus_snapshot) {
+    this.walk_speed = walk_speed
+    this.bus_snapshot = bus_snapshot
+
+    return super.search(start, end);
   }
 }
