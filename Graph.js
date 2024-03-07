@@ -13,18 +13,14 @@ export class Graph {
 
   addNode(node) {
     if(!this.adjList.has(node)) {
-      this.adjList.set(node, [])
+      this.adjList.set(node, new Set())
     }
   }
 
   addWaySingleDir(n1, n2, edge) {
     this.addNode(n1)
 
-    let node = this.adjList.get(n1)
-    const entry = new GraphEntry(n2, edge)
-    if(!node.includes(entry)) {
-      node.push(entry)
-    }
+    this.adjList.get(n1).add(new GraphEntry(n2, edge))
   }
 
   addWayBothDirs(n1, n2, edge) {

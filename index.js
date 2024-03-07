@@ -7,51 +7,18 @@ import {
   midpoint,
   findClosestNode,
   isNodeAt,
-  overlapping_pairs
+  overlapping_pairs, perpendicularDistance2
 } from './utils.js'
 import { OVERPASS_REQUEST, DPMP_APIKEY } from './constants.js'
 import { Graph } from './Graph.js'
 import { PathSearch } from './PathSearch.js'
-
+import {Path, Stop} from "./DataStructures.js";
 
 /*
 TODO:
  - Path splitting and joining
  - Search
 */
-
-// This is the "Node"
-class Stop {
-  lat = 0.0;
-  lon = 0.0;
-  name = "";
-
-  constructor(lat, lon, name) {
-    this.lat = lat;
-    this.lon = lon;
-    this.name = name;
-  }
-}
-
-// This is the "edge"
-class Path {
-  path = [];
-  pubtran_lines = [];
-  meanOfStransport = "";
-  length = 0.0;
-
-  constructor(path, meanOftransport, lines = []) {
-    this.meanOfStransport = meanOftransport;
-    this.path = path;
-    this.pubtran_lines = lines;
-
-    // Sum the distance of the path segments.
-    const sumDistance = (accum, current) =>
-      accum + gpsDistanceBetween(current[0].toReversed(), current[1].toReversed())
-
-    this.length = overlapping_pairs(path).reduce(sumDistance, 0)
-  }
-}
 
 function parse_geo(geo) {
 
@@ -66,51 +33,44 @@ function parse_geo(geo) {
   const line_strings = features.filter(feature => feature.geometry.type === 'LineString')
   const multiline_strings = features.filter(feature => feature.geometry.type === 'MultiLineString')
 
-  //console.dir(multiline_strings.map(s => s.geometry.coordinates), {depth: null})
-
-  nodes = points.map(point => {
+  for (const point of points) {
     const coords = point.geometry.coordinates
 
     if(point.properties.public_transport === 'platform') {
-      return new Stop(coords[1], coords[0], point.properties.name)
+      nodes.push(new Stop(coords[1], coords[0], point.properties.name))
     }
+  }
 
-    return null
-  }).filter(n => n !== null)
-
-  edges = line_strings.map(linestring => {
-    const properties = linestring.properties
-    const coords = linestring.geometry.coordinates
+  for (const ls of line_strings) {
+    const properties = ls.properties
+    const coords = ls.geometry.coordinates
 
     // Let's let Overpass do the filtering
     if (properties.highway) {
-      return new Path(coords, 'foot')
+      const edge = new Path(coords, 'foot')
+      edges.push(edge)
+
+      if(!isNodeAt(nodes, edge.path[0].toReversed())) {
+        nodes.push(new Stop(...edge.path[0].toReversed()))
+      }
+
+      if(!isNodeAt(nodes, edge.path[edge.path.length-1].toReversed())) {
+        nodes.push(new Stop(...edge.path[edge.path.length-1].toReversed()))
+      }
+
     }
+  }
 
-    return null
-  }).filter(n => n !== null)
-
-  const resultSets = multiline_strings.map(mls => {
+  for(const mls of multiline_strings) {
     const properties = mls.properties
     const coords = mls.geometry.coordinates
 
     if(properties.type === 'route' || properties.route !== undefined) {
 
-      const results = []
-
       for(const set of coords) {
-        results.push(new Path(set, 'public', [properties.ref]))
+        edges.push(new Path(set, 'public', [properties.ref]))
       }
 
-      return results
-    }
-
-    return [];
-  })
-
-  for(const r of resultSets) {
-    for (const j of r) {
-      edges.push(j)
     }
   }
 
@@ -119,98 +79,50 @@ function parse_geo(geo) {
   // 2nd stage - Post processing our loaded data, so it
   // has some sort of connectivity
 
-  console.log(`Items to process: ${edges.length * nodes.length}`)
+  const edge_to_node_map = new Map()
 
-  let itemsToProcess = edges.slice();
-  const segmentLen = 21/1000; // in km
+  let brk = false;
+  for (const edge of edges) {
+    edge_to_node_map.set(edge, new Set())
 
-  while(itemsToProcess.length !== 0) {
-    process.stderr.write(`\r${itemsToProcess.length}/${edges.length} (iters:${itemsToProcess.length * nodes.length})`)
-    let currentEdge = itemsToProcess.pop()
-
-    // This iterates over the straight-line segments of the path
-    overlapping_pairs(currentEdge.path).forEach((seg, segno) => {
-      //console.log(seg)
-      const segLength = gpsDistanceBetween(seg[0].toReversed(), seg[1].toReversed())
-
-      const segments = Math.max(1, Math.floor(segLength / segmentLen))
-
-      const [startLon, startLat] = seg[0]
-      const [endLon, endLat] = seg[1]
-
-      const dSegLat = (endLat - startLat) / segments
-      const dSegLon = (endLon - startLon) / segments
-
-      // For each sub-segment, compute the midpoint and its distance from
-      // the nearest node
-      for (let i = 0; i < segments; i++) {
-        const seg_start_lat = startLat + (i * dSegLat)
-        const seg_start_lon = startLon + (i * dSegLon)
-
-        // The start of the next segment is the end of the current one
-        const seg_end_lat = startLat + ((i + 1) * dSegLat)
-        const seg_end_lon = startLon + ((i + 1) * dSegLon)
-
-        const mid = midpoint(
-          [seg_start_lat, seg_start_lon],
-          [seg_end_lat, seg_end_lon]
-        )
-
-        const [closestN, minDist] = findClosestNode(nodes, mid)
-
-        if(minDist > 0 && minDist < (segmentLen * 1000 / 2) && segno !== 0 && segno !== currentEdge.path.length-1) {
-
-          // Remove the current edge from the list of edges
-          edges = edges.filter(item => item !== currentEdge)
-
-          let newPath = currentEdge.path.slice(0, segno)
-          newPath.push([closestN.lon, closestN.lat])
-          edges.push(new Path(newPath, currentEdge.meanOfStransport))
-
-          let newPath2 = currentEdge.path.slice(segno+1, currentEdge.path.length)
-          newPath2.unshift([closestN.lon, closestN.lat])
-          itemsToProcess.push(new Path(newPath2, currentEdge.meanOfStransport))
-
-          // Break out of the for-each iteration
-          return;
+    for (const [p1, p2] of overlapping_pairs(edge.path)) {
+      for (const node of nodes) {
+        const distanceToNode = perpendicularDistance2([node.lat, node.lon], p1.toReversed(), p2.toReversed()) * 1000
+        if(distanceToNode < 10) {
+          edge_to_node_map.get(edge).add(node)
+          //console.log(`Near node: ${node.name} (${distanceToNode}m) - Edge len:${edge.length} transport:${edge.meanOfStransport}`)
+          brk = true;
         }
+        if(brk) break;
       }
-
-      /* else { // this doesn't make any sense
-        // I guess let's create nodes at the edges?
-        const lastIndex = currentEdge.path.length-1
-
-        const [beginLon, beginLat] = currentEdge.path[0]
-        const [endLon, endLat] = currentEdge.path[lastIndex]
-
-        const start = new Stop(beginLat, beginLon)
-        const end = new Stop(endLat, endLon)
-
-        nodes.push(start)
-        nodes.push(end)
-      }*/
-
-    })
-
+      if(brk) break;
+    }
+    brk = false;
   }
 
-  // 3rd (and final) stage - Loading the data into a graph.
+  //console.log(edge_to_node_map)
 
-  //console.log(nodes)
-  //console.dir(edges, {depth: null})
-  //process.stdout.write(JSON.stringify(edges))
+  //console.log(edge_to_node_map.entries())
 
-  const graph = new Graph();
+  // Stage 3 - The graph
+  let graph = new Graph();
 
-  for (const edge of edges) {
-    const n1 = isNodeAt(nodes, edge.path[0].toReversed());
-    const n2 = isNodeAt(nodes, edge.path[edge.path.length-1].toReversed());
+  for(const [edge, nodes] of edge_to_node_map.entries()) {
+    const nodesArr = Array.from(nodes)
 
-    if (n1 !== null && n2 !== null) {
-      if (edge.meanOfStransport === 'foot') {
-        graph.addWayBothDirs(n1, n2, edge)
-      } else {
-        graph.addWaySingleDir(n1, n2, edge)
+    for(let i = 0; i < nodesArr.length; i++) {
+      for(let j = 0; j < nodesArr.length; j++) {
+        if (i === j) continue;
+
+        const n1 = nodesArr[i]
+        const n2 = nodesArr[j]
+
+        if(edge.meanOfStransport === 'foot') {
+          graph.addWayBothDirs(n1, n2, edge)
+        } else {
+          //console.log('Adding: ', n1, n2, edge)
+          graph.addWaySingleDir(n1, n2, edge)
+        }
       }
     }
   }
@@ -224,6 +136,7 @@ fetch_geojson(OVERPASS_REQUEST, (geojson) => {
 
   const graph = parse_geo(geojson)
   console.log(graph.length)
+  graph.print()
   //console.log(nodes, edges)
   const searcher = new PathSearch(graph)
 

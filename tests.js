@@ -1,4 +1,4 @@
-import {gpsDistanceBetween, midpoint} from "./utils.js";
+import {gpsDistanceBetween, midpoint, perpendicularDistance, perpendicularDistance2} from "./utils.js";
 
 const lat1 = 50;
 const lon1 = 15;
@@ -24,8 +24,13 @@ function test_distance() {
     }
 }
 
+function test_perpendicular() {
+    console.log(perpendicularDistance2([50.25597207963554, 15.763214133314348], [50.257616844001774, 15.760182489620327], [50.256131816156056, 15.76751003525883]) * 1000)
+}
+
 /* MAIN */
 //test_midpoint()
 test_distance()
+test_perpendicular()
 
 // both Midpoint and Distance work as they should

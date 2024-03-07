@@ -4,6 +4,7 @@ import crawler from 'crawler-request'
 
 export const DEG_TO_RAD = Math.PI / 180
 const EARTH_RADIUS = 6371; // km
+const EARTH_CIRC = 40075; // km
 
 export const to_deg = (rad) => rad * 180 / Math.PI
 export const to_rad = (deg) => deg * Math.PI / 180
@@ -130,4 +131,76 @@ export function overlapping_pairs(arr) {
   }
 
   return result
+}
+
+function cross(a, b) {
+  const [a1, a2, a3] = a;
+  const [b1, b2, b3] = b;
+
+  return [ a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1 ]
+}
+
+function dot(a, b) {
+  let result = 0;
+  for (let i = 0; i < a.length; i++) {
+    result += a[i] * b[i];
+  }
+  return result;
+}
+
+function makeXYZ(point) {
+  const [lat, lng] = point;
+  return [
+    Math.sin(lat)*Math.cos(lng),
+    Math.sin(lng),
+    Math.cos(lat)*Math.cos(lng)
+  ]
+}
+
+function div(v1, number) {
+  let newVec = v1.slice()
+  for (let i = 0; i < v1.length; i++) {
+    newVec[i] /= number;
+  }
+
+  return newVec
+}
+
+// https://math.stackexchange.com/questions/993236/calculating-a-perpendicular-distance-to-a-line-when-using-coordinates-latitude
+export function perpendicularDistance(point, lineA, lineB) {
+
+  const C = makeXYZ(point)
+  const A = makeXYZ(lineA)
+  const B = makeXYZ(lineB)
+
+  const n = cross(A, B)
+  const N = div(n, Math.sqrt(dot(n, n)))
+
+  const dist = (90 * DEG_TO_RAD) - Math.abs(Math.acos(dot(C, N)))
+  const dist_a_b = Math.acos(dot(A, B))
+
+  return [dist * EARTH_CIRC, dist_a_b * EARTH_CIRC]
+}
+
+export function perpendicularDistance2(c, a, b) {
+  const [latA, lonA] = a;
+  const [latB, lonB] = b;
+  const [latC, lonC] = c;
+
+  const y = Math.sin(lonC - lonA) * Math.cos(latC);
+  const x = Math.cos(latA) * Math.sin(latC) - Math.sin(latA) * Math.cos(latC) * Math.cos(latC - latA);
+  const bearing1 = 360 - ((to_deg(Math.atan2(y, x)) + 360) % 360);
+
+  const y2 = Math.sin(lonB - lonA) * Math.cos(latB);
+  const x2 = Math.cos(latA) * Math.sin(latB) - Math.sin(latA) * Math.cos(latB) * Math.cos(latB - latA);
+  const bearing2 = 360 - ((to_deg(Math.atan2(y2, x2)) + 360) % 360);
+
+  const lat1Rads = to_rad(latA);
+  const lat3Rads = to_rad(latC);
+  const dLon = to_rad(lonC - lonA);
+
+  const distanceAC = Math.acos(Math.sin(lat1Rads) * Math.sin(lat3Rads)+Math.cos(lat1Rads)*Math.cos(lat3Rads)*Math.cos(dLon)) * EARTH_RADIUS;
+  const min_distance = Math.abs(Math.asin(Math.sin(distanceAC/6371)*Math.sin(to_rad(bearing1)-to_rad(bearing2))) * EARTH_RADIUS);
+
+  return min_distance
 }
